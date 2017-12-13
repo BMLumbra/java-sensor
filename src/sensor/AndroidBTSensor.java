@@ -114,7 +114,7 @@ public class AndroidBTSensor implements BTSensor {
 	private BluetoothSocket sensorSocket = null;
 	private BluetoothAdapter btAdapter = null;
 	private UUID uuid = null;
-	private String logTag = new String();
+	private final String logTag;
 	private SensorProperties properties = null;
 	private PollingThread pollingThread = new BTPollingThread();
 	
