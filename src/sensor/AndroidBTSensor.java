@@ -132,12 +132,24 @@ public class AndroidBTSensor implements BTSensor {
 
 	@Override
 	public void connect() {
-	    (new ConnectionThread()).start();
+		Thread connectionThread = new ConnectionThread();
+	    connectionThread.start();
+	    try {
+	    	connectionThread.join();
+	    } catch (InterruptedException e) {
+	    	Log.e(logTag, "Connection thread interrupted!", e);
+	    }
 	}
 
 	@Override
 	public void disconnect() {
-		(new DisconnectionThread()).start();		
+		Thread disconnectionThread = new DisconnectionThread();
+	    disconnectionThread.start();
+	    try {
+	    	disconnectionThread.join();
+	    } catch (InterruptedException e) {
+	    	Log.e(logTag, "Connection thread interrupted!", e);
+	    }	
 	}
 	
 	@Override
@@ -162,10 +174,20 @@ public class AndroidBTSensor implements BTSensor {
 
 	@Override
 	public void waitForNextDataPoint() {
+		Thread waitingThread = new Thread() {
+			public void run() {
+				try {
+					Thread.sleep(getPollingPeriodMs());
+				} catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+				}
+			}
+		};
+		
 		try {
-			Thread.sleep(getPollingPeriodMs());
+			waitingThread.join();
 		} catch (InterruptedException e) {
-			Thread.currentThread().interrupt();
+			Log.e(logTag, "Waiting thread interrupted!", e);
 		}
 	}
 	
