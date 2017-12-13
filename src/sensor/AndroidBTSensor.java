@@ -47,29 +47,27 @@ public class AndroidBTSensor implements BTSensor {
 			byte outBuf[] = new byte[1];
 			int numBytes = 0;
 
-			while (true) {
-				try {
-					outBuf[0] = '\0';
-					outStream.write(outBuf);
-				} catch (IOException e) {
-					Log.d(logTag, "Input stream disconnected", e);
-					break;					
+			try {
+				outBuf[0] = '\0';
+				outStream.write(outBuf);
+			} catch (IOException e) {
+				Log.e(logTag, "Input stream disconnected, exiting", e);
+				return;
+			}
+			try {
+				numBytes = inStream.read(inBuf);
+				if (numBytes > properties.getResolutionBytes()) {
+					Log.e(logTag, "Sensor sent too many bytes!");
 				}
-				try {
-					numBytes = inStream.read(inBuf);
-					if (numBytes > properties.getResolutionBytes()) {
-						Log.e(logTag, "Sensor sent too many bytes!");
-					}
-					ByteBuffer bufferStream = ByteBuffer.wrap(inBuf);
-					bufferStream.order(ByteOrder.BIG_ENDIAN);
-					synchronized (queuedDataLock) {
-						queuedData = bufferStream.getDouble() * properties.getFullScaleValue();
-					}
-				} catch (IOException e) {
-					Log.d(logTag, "Input stream disconnected", e);
-					break;
+				ByteBuffer bufferStream = ByteBuffer.wrap(inBuf);
+				bufferStream.order(ByteOrder.BIG_ENDIAN);
+				synchronized (queuedDataLock) {
+					queuedData = bufferStream.getDouble() * properties.getFullScaleValue();
 				}
-			}	
+			} catch (IOException e) {
+				Log.e(logTag, "Input stream disconnected, exiting", e);
+				return;
+			}
 		}
 		
 		@Override
