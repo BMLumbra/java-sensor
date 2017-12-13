@@ -38,27 +38,8 @@ public class AndroidBTSensor implements BTSensor {
 	}
 	
 	public class BTPollingThread extends PollingThread {
-		private final InputStream inStream;
-		private final OutputStream outStream;
-		
-		public BTPollingThread() {
-			InputStream tmpIn = null;
-			OutputStream tmpOut = null;
-			
-			try {
-				tmpIn = sensorSocket.getInputStream();
-			} catch (IOException e) {
-				Log.e(logTag, "Unable to get input stream from socket!", e);
-			}
-			try {
-				tmpOut = sensorSocket.getOutputStream();
-			} catch (IOException e) {
-				Log.e(logTag, "Unable to get output stream from socket!", e);
-			}
-			
-			inStream = tmpIn;
-			outStream = tmpOut;
-		}
+		private InputStream inStream;
+		private OutputStream outStream;
 		
 		@Override
 		public void poll() {
@@ -91,6 +72,28 @@ public class AndroidBTSensor implements BTSensor {
 			}	
 		}
 		
+		@Override
+		public void run() {
+			InputStream tmpIn = null;
+			OutputStream tmpOut = null;
+			
+			try {
+				tmpIn = sensorSocket.getInputStream();
+			} catch (IOException e) {
+				Log.e(logTag, "Unable to get input stream from socket!", e);
+			}
+			try {
+				tmpOut = sensorSocket.getOutputStream();
+			} catch (IOException e) {
+				Log.e(logTag, "Unable to get output stream from socket!", e);
+			}
+			
+			inStream = tmpIn;
+			outStream = tmpOut;
+			
+			super.run();
+		}
+		
 		/*private void write(byte[] bytes) {
 			try {
 				outStream.write(bytes);
@@ -116,16 +119,18 @@ public class AndroidBTSensor implements BTSensor {
 	private UUID uuid = null;
 	private final String logTag;
 	private SensorProperties properties = null;
-	private PollingThread pollingThread = new BTPollingThread();
+	private PollingThread pollingThread = null;
 	
-	public AndroidBTSensor(BluetoothDevice sensorDevice, String appTag, SensorProperties props) {
-		this(sensorDevice, appTag, props, 1.0d);
+	public AndroidBTSensor(BluetoothAdapter adapter, BluetoothDevice sensorDevice, String appTag, SensorProperties props) {
+		this(adapter, sensorDevice, appTag, props, 1.0d);
 	}
 	
-	public AndroidBTSensor(BluetoothDevice sensorDevice, String appTag, SensorProperties props, double rateHz) {
+	public AndroidBTSensor(BluetoothAdapter adapter, BluetoothDevice sensorDevice, String appTag, SensorProperties props, double rateHz) {
+		btAdapter = adapter;
 		this.sensorDevice = sensorDevice;
 		uuid = sensorDevice.getUuids()[0].getUuid();
 		logTag = appTag;
+		pollingThread = new BTPollingThread();
 		setPollingRate(rateHz);
 		properties = props;
 	}
