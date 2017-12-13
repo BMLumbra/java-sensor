@@ -1,10 +1,9 @@
 package sensor;
 
 import java.io.InputStream;
+import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.UUID;
 
 import android.bluetooth.BluetoothAdapter;
@@ -38,40 +37,10 @@ public class AndroidBTSensor implements BTSensor {
 	}
 	
 	public class BTPollingThread extends PollingThread {
-		private InputStream inStream;
-		private OutputStream outStream;
+		private final InputStream inStream;
+		private final OutputStream outStream;
 		
-		@Override
-		public void poll() {
-			byte inBuf[] = new byte[8];
-			byte outBuf[] = new byte[1];
-			int numBytes = 0;
-
-			try {
-				outBuf[0] = '\0';
-				outStream.write(outBuf);
-			} catch (IOException e) {
-				Log.e(logTag, "Input stream disconnected, exiting", e);
-				return;
-			}
-			try {
-				numBytes = inStream.read(inBuf);
-				if (numBytes > properties.getResolutionBytes()) {
-					Log.e(logTag, "Sensor sent too many bytes!");
-				}
-				ByteBuffer bufferStream = ByteBuffer.wrap(inBuf);
-				bufferStream.order(ByteOrder.BIG_ENDIAN);
-				synchronized (queuedDataLock) {
-					queuedData = bufferStream.getDouble() * properties.getFullScaleValue();
-				}
-			} catch (IOException e) {
-				Log.e(logTag, "Input stream disconnected, exiting", e);
-				return;
-			}
-		}
-		
-		@Override
-		public void run() {
+		public BTPollingThread() {
 			InputStream tmpIn = null;
 			OutputStream tmpOut = null;
 			
@@ -88,17 +57,38 @@ public class AndroidBTSensor implements BTSensor {
 			
 			inStream = tmpIn;
 			outStream = tmpOut;
-			
-			super.run();
 		}
 		
-		/*private void write(byte[] bytes) {
+		@Override
+		public void poll() {
+			try {
+				DataInputStream dataStream = new DataInputStream(inStream);
+				synchronized (queuedDataLock) {
+					queuedData = (double)dataStream.readFloat() * properties.getFullScaleValue();
+				}
+			} catch (IOException e) {
+				Log.e(logTag, "Input stream disconnected, exiting", e);
+				return;
+			}
+		}
+		
+		@Override
+		public void setPollingRate(double rateHz) {
+			byte payload[] = new byte[2];
+			payload[0] = 1;
+			payload[1] = (byte)rateHz;
+			write(payload);
+			
+			super.setPollingRate(rateHz);
+		}
+		
+		private void write(byte[] bytes) {
 			try {
 				outStream.write(bytes);
 			} catch (IOException e) {
 				Log.e(logTag, "Error sending data on OutputStream!", e);
 			}
-		}*/
+		}
 	}
 	
 	public class DisconnectionThread extends Thread {
@@ -118,6 +108,8 @@ public class AndroidBTSensor implements BTSensor {
 	private final String logTag;
 	private SensorProperties properties = null;
 	private PollingThread pollingThread = null;
+	boolean connected = false;
+	double initPollingRate = 0.0d;
 	
 	public AndroidBTSensor(BluetoothAdapter adapter, BluetoothDevice sensorDevice, String appTag, SensorProperties props) {
 		this(adapter, sensorDevice, appTag, props, 1.0d);
@@ -128,7 +120,6 @@ public class AndroidBTSensor implements BTSensor {
 		this.sensorDevice = sensorDevice;
 		uuid = sensorDevice.getUuids()[0].getUuid();
 		logTag = appTag;
-		pollingThread = new BTPollingThread();
 		setPollingRate(rateHz);
 		properties = props;
 	}
@@ -142,6 +133,8 @@ public class AndroidBTSensor implements BTSensor {
 	    } catch (InterruptedException e) {
 	    	Log.e(logTag, "Connection thread interrupted!", e);
 	    }
+	    connected = true;
+		pollingThread = new BTPollingThread();
 	}
 
 	@Override
@@ -152,17 +145,23 @@ public class AndroidBTSensor implements BTSensor {
 	    	disconnectionThread.join();
 	    } catch (InterruptedException e) {
 	    	Log.e(logTag, "Connection thread interrupted!", e);
-	    }	
+	    }
+	    connected = false;
 	}
 	
 	@Override
 	public void startPolling() {
 		pollingThread.start();
+	    setPollingRate(initPollingRate);
 	}
 
 	@Override
 	public void setPollingRate(double rateHz) {
-		pollingThread.setPollingRate(rateHz);	
+		if (connected && pollingThread.isAlive()) {
+			pollingThread.setPollingRate(rateHz);
+		} else {
+			initPollingRate = rateHz;
+		}
 	}
 
 	@Override
@@ -178,19 +177,21 @@ public class AndroidBTSensor implements BTSensor {
 	@Override
 	public void waitForNextDataPoint() {
 		Thread waitingThread = new Thread() {
+			@Override
 			public void run() {
+				long sleepTime = getPollingPeriodMs();
 				try {
-					Thread.sleep(getPollingPeriodMs());
+					Thread.sleep(sleepTime);
 				} catch (InterruptedException e) {
 					Thread.currentThread().interrupt();
 				}
-			}
-		};
+			}};
 		
+		waitingThread.start();
 		try {
 			waitingThread.join();
 		} catch (InterruptedException e) {
-			Log.e(logTag, "Waiting thread interrupted!", e);
+			Thread.currentThread().interrupt();
 		}
 	}
 	
