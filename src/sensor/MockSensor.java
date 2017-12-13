@@ -1,10 +1,15 @@
 package sensor;
 
 public class MockSensor implements Sensor {
-	double queuedDataValue = 0.0d;
-	double pollingRateHz = 1.0d;
-	Object queuedDataLock = new Object();
-	Object pollingRateLock = new Object();
+	class MockPollingThread extends PollingThread {
+		@Override
+		public void poll() {
+			synchronized (queuedDataLock) {
+				queuedData = Math.random();
+			}
+		}
+	}
+	PollingThread pollingThread = new MockPollingThread();
 	
 	public MockSensor() {
 		
@@ -22,33 +27,12 @@ public class MockSensor implements Sensor {
 
 	@Override
 	public void startPolling() {
-		Thread pollThread = new Thread(new Runnable() {
-			@Override
-			public void run() {
-				long sleepTime = 0;
-				while (true) {
-					synchronized (queuedDataLock) {
-						queuedDataValue = Math.random();
-					}
-					try {
-						synchronized (pollingRateLock) {
-							sleepTime = (long)(1000 / pollingRateHz);
-						}
-						Thread.sleep(sleepTime);
-					} catch (InterruptedException e) {
-						Thread.currentThread().interrupt();
-					}
-				}
-			}
-		});
-		pollThread.start();
+		pollingThread.start();
 	}
 
 	@Override
 	public void setPollingRate(double rateHz) {
-		synchronized (pollingRateLock) {
-			pollingRateHz = rateHz;
-		}
+		pollingThread.setPollingRate(rateHz);
 	}
 
 	@Override
@@ -58,25 +42,21 @@ public class MockSensor implements Sensor {
 
 	@Override
 	public double getPollingRate() {
-		return pollingRateHz;
+		return pollingThread.getPollingRate();
 	}
 
 	@Override
 	public void waitForNextDataPoint() {
-		Thread waitingThread = new Thread(new Runnable() {
+		Thread waitingThread = new Thread() {
 			@Override
 			public void run() {
-				long sleepTime = 0;
+				long sleepTime = (long)(1000 / pollingThread.getPollingRate());
 				try {
-					synchronized (pollingRateLock) {
-						sleepTime = (long)(1000 / pollingRateHz);
-					}
 					Thread.sleep(sleepTime);
 				} catch (InterruptedException e) {
 					Thread.currentThread().interrupt();
 				}
-			}
-		});
+			}};
 		
 		waitingThread.start();
 		try {
@@ -88,9 +68,7 @@ public class MockSensor implements Sensor {
 
 	@Override
 	public double getData() {
-		synchronized (queuedDataLock) {
-			return queuedDataValue;
-		}
+		return pollingThread.getData();
 	}
 
 }
