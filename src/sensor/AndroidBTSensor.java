@@ -118,19 +118,15 @@ public class AndroidBTSensor implements BTSensor {
 	private SensorProperties properties = null;
 	private PollingThread pollingThread = new BTPollingThread();
 	
-	public AndroidBTSensor(BluetoothDevice sensorDevice, UUID app_uuid, String appTag, SensorProperties props) {
-		this.sensorDevice = sensorDevice;
-		uuid = app_uuid;
-		logTag = appTag;
-		pollingThread.setPollingRate(1.0d);
-		properties = props;
+	public AndroidBTSensor(BluetoothDevice sensorDevice, String appTag, SensorProperties props) {
+		this(sensorDevice, appTag, props, 1.0d);
 	}
 	
-	public AndroidBTSensor(BluetoothDevice sensorDevice, UUID app_uuid, String appTag, double rateHz, SensorProperties props) {
+	public AndroidBTSensor(BluetoothDevice sensorDevice, String appTag, SensorProperties props, double rateHz) {
 		this.sensorDevice = sensorDevice;
-		uuid = app_uuid;
+		uuid = sensorDevice.getUuids()[0].getUuid();
 		logTag = appTag;
-		pollingThread.setPollingRate(rateHz);
+		setPollingRate(rateHz);
 		properties = props;
 	}
 
